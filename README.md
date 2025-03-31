@@ -2,6 +2,8 @@
 
 This is a simple web-based Math Training Game designed to help users practice basic arithmetic operations.
 
+You can try the game here: https://d57udy.github.io/Math-trainer/
+
 ## Features
 
 Based on the [Requirements Document](Requirements.md), this application currently implements:
