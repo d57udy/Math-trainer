@@ -12,29 +12,57 @@
 
         <!-- Main Menu View -->
         <div id="main-menu-view" class="view active">
-            <h2>Main Menu</h2>
-            <button id="start-regular-game-btn">Start Regular Game (Timed)</button>
-            <button id="start-training-mode-btn">Start Training Mode</button>
-            <button id="view-training-list-btn">View Training List (<span id="training-list-count">0</span>)</button>
-            <button id="settings-btn">Settings</button>
+            <div class="menu-buttons">
+                <button id="start-regular-game-btn" class="action-button">New Challenge</button>
+                <button id="start-training-mode-btn" class="action-button">Train Incorrect</button>
+                <button id="view-training-list-btn" class="action-button">View Training List</button>
+                <button id="view-achievements-btn" class="action-button">View Achievements</button>
+                <button id="settings-btn" class="action-button">Settings</button>
+            </div>
         </div>
 
         <!-- Game View (Regular & Training) -->
         <div id="game-view" class="view">
-            <div id="game-info">
-                <span id="timer-display">Time: 60s</span>
-                <span id="score-display">Score: 0</span>
+            <div class="game-layout-container">
+
+                <!-- Main Game Area -->
+                <div class="game-main-panel">
+                    <!-- Header: Stats -->
+                    <div class="game-header">
+                        <div id="timer-display">Time: 0s</div>
+                        <div id="score-display">Score: 0</div>
+                        <div id="streak-counter">🔥 0</div>
+                        <div id="award-indicator" class="award-indicator"></div>
+                    </div>
+
+                    <!-- Interaction: Equation & Answer -->
+                    <div class="game-interaction-area">
+                        <div class="equation-display" id="equation-display"></div>
+                        <div class="answer-input-container">
+                            <input type="number" id="answer-input" placeholder="Enter answer">
+                            <button id="submit-answer-btn">Submit</button>
+                        </div>
+                    </div>
+
+                    <!-- Feedback -->
+                    <div class="feedback-display" id="feedback-display"></div>
+
+                    <!-- Controls -->
+                    <div class="game-controls">
+                        <button id="skip-equation-btn">Skip</button>
+                        <button id="quit-game-btn">Quit to Main Menu</button>
+                    </div>
+                </div>
+
+                <!-- Side Panel: Achievements -->
+                <div class="game-side-panel">
+                    <h3>Unlocked Achievements</h3>
+                    <div id="unlocked-achievements-list" class="unlocked-achievements-list">
+                        <!-- Icons will be populated by JS -->
+                    </div>
+                </div>
+
             </div>
-            <div id="equation-display">
-                <span id="equation-text">Equation</span>
-                <span id="award-indicator"></span>
-            </div>
-            <div id="answer-section">
-                <input type="text" id="answer-input" placeholder="Your answer">
-                <button id="submit-answer-btn">Submit</button>
-            </div>
-            <div id="feedback-display"></div>
-            <button id="quit-game-btn">Quit to Main Menu</button>
         </div>
 
         <!-- Settings View -->
@@ -61,16 +89,30 @@
                     <label><input type="checkbox" id="allow-fractions" disabled> Allow Fractions (NYI)</label><br>
                     <label><input type="checkbox" id="allow-decimals" disabled> Allow Decimals (NYI)</label><br>
                 </fieldset>
-                <fieldset>
-                    <legend>Timed Game Duration</legend>
-                    <div id="timer-duration-inputs">
-                         <label for="timer-duration-min">Minutes:</label>
-                         <input type="number" id="timer-duration-min" value="1" min="0" max="60" step="1">
-                         <label for="timer-duration-sec">Seconds:</label>
-                         <input type="number" id="timer-duration-sec" value="0" min="0" max="59" step="1">
+
+                <div class="settings-section">
+                    <h3>Game Settings</h3>
+                    <div class="field-group">
+                        <label for="timer-duration-min">Timer Duration (minutes):</label>
+                        <input type="number" id="timer-duration-min" min="0" max="60" value="1">
+                        <label for="timer-duration-sec">(seconds):</label>
+                        <input type="number" id="timer-duration-sec" min="0" max="59" value="0">
+                        <div id="timer-duration-error" class="error-message"></div>
                     </div>
-                    <small id="timer-duration-error" class="error-message"></small>
-                </fieldset>
+                    <div class="field-group">
+                        <label for="required-correct-solves">Required Correct Solves:</label>
+                        <input type="number" id="required-correct-solves" min="1" max="10" value="3">
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Data Management</h3>
+                    <div class="field-group">
+                        <button type="button" id="reset-achievements-btn" class="danger-button">Reset Achievements</button>
+                        <button type="button" id="reset-history-btn" class="danger-button">Reset History</button>
+                    </div>
+                </div>
+
                 <button type="submit" id="save-settings-btn">Save Settings</button>
                 <button type="button" id="back-to-menu-from-settings-btn">Back to Main Menu</button>
             </form>
@@ -93,6 +135,30 @@
             <p>Final Score: <span id="final-score">0</span></p>
             <button id="play-again-btn">Play Again</button>
             <button id="back-to-menu-from-score-btn">Back to Main Menu</button>
+        </div>
+
+        <!-- Achievement Popup -->
+        <div id="achievement-popup" class="achievement-popup">
+            <div class="achievement-icon"></div>
+            <div class="achievement-title"></div>
+            <div class="achievement-description"></div>
+            <div class="achievement-progress">
+                <div class="achievement-progress-bar"></div>
+            </div>
+        </div>
+
+        <!-- Achievements & History View -->
+        <div id="achievements-view" class="view">
+            <h2>Achievements & History</h2>
+            <div class="achievements-section">
+                <h3>Your Achievements</h3>
+                <div id="achievements-list" class="achievements-grid"></div>
+            </div>
+            <div class="history-section">
+                <h3>Recent Calculations</h3>
+                <div id="calculations-history" class="history-list"></div>
+            </div>
+            <button id="back-to-menu-from-achievements-btn" class="action-button">Back to Main Menu</button>
         </div>
 
     </div>
