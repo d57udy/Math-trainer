@@ -40,6 +40,8 @@ h2 {
     border-radius: 5px;
     margin-top: 20px;
     background-color: #fdfdfd;
+    position: relative;
+    min-height: 300px; /* Ensure view has enough height for absolute positioning */
 }
 
 .view.active {
@@ -451,17 +453,16 @@ input[type="text"]#answer-input {
 .menu-buttons {
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    margin: 20px 0;
+    gap: 10px;
     width: 100%;
     max-width: 300px;
     margin: 20px auto;
 }
 
-.menu-buttons .action-button {
+.menu-buttons button {
     width: 100%;
-    padding: 15px 20px;
-    font-size: 1.2em;
+    padding: 12px 15px;
+    font-size: 1.1em;
     margin: 0;
 }
 
@@ -714,4 +715,16 @@ input[type="text"]#answer-input {
 
 #quit-game-btn:hover {
     background: #c82333;
+}
+
+/* Version Info Styling */
+#version-info {
+    position: absolute; /* Position relative to the parent view */
+    bottom: 10px;       /* 10px from the bottom */
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.8em;   /* Smaller font size */
+    color: #6c757d;   /* Grey color */
+    margin-top: 20px; /* Add some space above it */
 } 
