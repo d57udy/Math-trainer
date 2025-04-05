@@ -115,10 +115,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Simple reusable function to play a sound
     function playSound(soundName) {
+        console.log(`[playSound] Playing sound: ${soundName} (${SOUND_FILES[soundName] || 'File not defined'})`); // Add log
         if (SOUND_FILES[soundName]) {
             try {
                 const audio = new Audio(SOUND_FILES[soundName]);
-                audio.play().catch(error => console.log(`Playback failed for ${soundName}:`, error)); // Handle potential play errors
+                audio.play().catch(error => console.log(`Playback failed for ${soundName}:`, error)); // Restore original play call
             } catch (error) {
                 console.error(`Error loading sound ${soundName}:`, error);
             }
@@ -783,6 +784,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Robust Settings Loading for Game Logic ---
         currentSettings = { ...defaultSettings }; // Start with defaults
+
+        // Explicitly clear any existing timer *before* setting a new one
+        if (gameTimerInterval) {
+            console.log('[startGame] Clearing existing gameTimerInterval before start.');
+            clearInterval(gameTimerInterval);
+            gameTimerInterval = null;
+        }
+
         const savedSettingsJSON = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (savedSettingsJSON) {
             try {
@@ -841,6 +850,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (mode === 'regular') {
+            console.log(`[startGame] Starting timer with duration: ${currentSettings.timerDuration} seconds`); // Add log
             timeLeft = currentSettings.timerDuration;
             if (timerDisplay) {
                 timerDisplay.textContent = `Time: ${formatTime(timeLeft)}`;
@@ -850,8 +860,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 scoreDisplay.style.display = 'block';
             }
 
-            if (gameTimerInterval) clearInterval(gameTimerInterval);
+            console.log('[startGame] About to set interval.'); // <<< ADD LOG
             gameTimerInterval = setInterval(updateTimer, 1000);
+            console.log('[startGame] Interval set. Calling nextEquation...'); // <<< ADD LOG
 
             nextEquation();
             showView('game');
@@ -872,6 +883,8 @@ document.addEventListener('DOMContentLoaded', () => {
              equationsInCurrentTrainingSession.sort(() => Math.random() - 0.5);
 
              // Training mode specifics
+             console.log(`[startGame] Starting timer with duration: ${currentSettings.timerDuration} seconds`); // Add log
+             timeLeft = currentSettings.timerDuration;
              if (timerDisplay) {
                 timerDisplay.style.display = 'none'; // Hide timer
              }
@@ -891,40 +904,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update achievements view when starting game
         updateUnlockedAchievementsView();
-
-        playSound('gameOver'); // Play game over sound
-
-        if (finalScoreSpan) {
-            finalScoreSpan.textContent = currentScore;
-        }
     }
 
     function updateTimer() {
         timeLeft--;
+        console.log(`[updateTimer] timeLeft is now: ${timeLeft}`); // Add log
         if (timerDisplay) {
             timerDisplay.textContent = `Time: ${formatTime(timeLeft)}`;
         }
         if (timeLeft <= 0) {
+            console.log(`[updateTimer] Time is <= 0, calling endGame().`); // Add log
             endGame();
         }
     }
 
     function endGame() {
+        console.log('[endGame] Function entered.');
         console.log('Game Over!');
         isGameOver = true; // Set game over flag
         if (gameTimerInterval) {
+            console.log('[endGame] Clearing gameTimerInterval.'); // Log clearing
             clearInterval(gameTimerInterval);
             gameTimerInterval = null;
         }
+
+        // Log right before playing the sound
+        console.log('[endGame] About to play gameOver sound.');
+        playSound('gameOver'); // Play game over sound
+
         if (finalScoreSpan) {
             finalScoreSpan.textContent = currentScore;
         }
         currentGameMode = null; // Reset mode
         currentEquation = null;
         showView('scoreSummary');
+
+        // Use the single saveHistory function
+        saveHistory(); 
+        // No need to call updateHistoryView here, it's called when viewing the achievements page
     }
 
     function nextEquation() {
+        console.log('[nextEquation] Function entered.'); // <<< ADD LOG
         if (!equationDisplay) {
             console.error('Equation display element not found');
             return;
@@ -944,6 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentGameMode === 'regular') {
             currentEquation = generateEquation();
+            console.log('[nextEquation] Equation generated/retrieved.', currentEquation); // <<< ADD LOG
         } else if (currentGameMode === 'training') {
              if (equationsInCurrentTrainingSession.length > 0) {
                 const nextEqString = equationsInCurrentTrainingSession.shift();
@@ -983,6 +1005,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentEquation) {
             equationDisplay.textContent = currentEquation.displayString;
+            console.log('[nextEquation] Equation string displayed.'); // <<< ADD LOG
+
             // Trigger fade-in animation
             void equationDisplay.offsetWidth; // Force reflow
             equationDisplay.classList.add('animate-equation-fadein');
@@ -991,31 +1015,48 @@ document.addEventListener('DOMContentLoaded', () => {
             const stats = progressData[currentEquation.displayString] || { currentAward: 'None' };
             if (awardIndicator) {
                 awardIndicator.textContent = AWARD_SYMBOLS[stats.currentAward] || '';
+                console.log('[nextEquation] Award indicator set.'); // <<< ADD LOG
             }
 
             // Record start time for timing this question (FR3.1.2)
             equationStartTime = Date.now();
+            console.log('[nextEquation] Start time recorded.'); // <<< ADD LOG
         } else {
             // Handle generation failure or end of training list
-            equationDisplay.textContent = "Error generating equation.";
+            equationDisplay.textContent = "Error: Could not generate a valid equation.";
             if(currentGameMode === 'regular') {
-                console.error("Equation generation failed in regular mode.");
-                endGame(); // End game if we can't generate more questions
+                console.error("Equation generation failed in regular mode, likely due to restrictive settings.");
+                // Don't call endGame() immediately on startup failure.
+                // Instead, stop the timer, alert the user, and go back to the menu.
+                if (gameTimerInterval) {
+                    clearInterval(gameTimerInterval);
+                    gameTimerInterval = null;
+                }
+                currentGameMode = null; // Reset mode
+                alert("Could not generate an equation with the current settings. Please adjust the number range or allowed operations.");
+                showView('mainMenu');
+                return; // Stop further processing in nextEquation
             } else if (currentGameMode === 'training' && equationsInCurrentTrainingSession.length === 0) {
-                // Already handled above
-            } else {
-                console.error("Failed to get next equation in training mode.");
+                // Training completion is handled earlier
+            } else if (currentGameMode === 'training'){
+                console.error("Failed to get next equation in training mode (unexpected error).");
                 showView('mainMenu'); // Go back to menu if error occurs mid-training
+            } else {
+                console.error("Failed to get next equation in unknown mode or state.")
+                showView('mainMenu');
             }
         }
         if (answerInput) {
             answerInput.focus();
+            console.log('[nextEquation] Input focused.'); // Restore log
         }
-
+ 
         // Remove fade-in class after animation completes
         setTimeout(() => {
+            console.log('[nextEquation] Timeout: Removing fade-in animation class.'); // <<< ADD LOG
             equationDisplay.classList.remove('animate-equation-fadein');
         }, 400); // Match animation duration
+        console.log('[nextEquation] SetTimeout for animation removal scheduled.'); // <<< ADD LOG
     }
 
     function checkAnswer() {
@@ -1128,6 +1169,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     quitGameBtn.addEventListener('click', () => {
         if (gameTimerInterval) {
+            console.log('[quitGameBtn] Clearing gameTimerInterval.');
             clearInterval(gameTimerInterval);
             gameTimerInterval = null;
         }
@@ -1273,7 +1315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             trainingList.push(equationString);
             trainingListProgress[equationString] = 0;
             saveTrainingList();
-            updateTrainingListUI();
+            // No UI update needed here usually, happens when viewing list
         }
     }
 
@@ -1309,10 +1351,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTrainingList();
     loadHistory(); // Ensure history is loaded
 
-    // Add click sound to all buttons
-    document.querySelectorAll('button').forEach(button => {
-        button.addEventListener('click', () => playSound('click'));
-    });
+    // // Temporarily disabled generic button click sound for debugging
+    // document.querySelectorAll('button').forEach(button => {
+    //     button.addEventListener('click', () => {
+    //         console.log(`[ClickDebug] Clicked button: ${button.id || 'no id'}`)
+    //         playSound('click');
+    //      });
+    // });
 
     showView('mainMenu'); // Start at the main menu
     console.log('Initialization Complete.');
