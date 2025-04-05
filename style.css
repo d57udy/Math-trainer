@@ -58,16 +58,23 @@ button {
     cursor: pointer;
     font-size: 1em;
     margin: 5px;
-    transition: background-color 0.3s ease;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    user-select: none;
 }
 
 button:hover {
     background-color: #4a54c4;
 }
 
+button:active {
+    transform: scale(0.97);
+    background-color: #404ab0;
+}
+
 button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+    transform: none;
 }
 
 /* Input Fields */
@@ -160,17 +167,22 @@ input[type="text"]#answer-input {
 }
 
 #feedback-display {
-    min-height: 1.5em; /* Reserve space for feedback */
+    min-height: 1.5em;
     font-weight: bold;
     margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #feedback-display.correct {
-    color: #5cb85c;
+    background-color: #d4edda;
+    color: #155724;
 }
 
 #feedback-display.incorrect {
-    color: #d9534f;
+    background-color: #f8d7da;
+    color: #721c24;
 }
 
 /* Training List */
@@ -199,67 +211,70 @@ input[type="text"]#answer-input {
 }
 
 /* Visual Feedback and Animations */
-@keyframes correctAnswer {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-}
-
-@keyframes incorrectAnswer {
-    0% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-    100% { transform: translateX(0); }
-}
-
-@keyframes streakCounter {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
-
-@keyframes achievementUnlock {
-    0% { transform: scale(0); opacity: 0; }
-    50% { transform: scale(1.2); opacity: 1; }
+@keyframes correctAnswerPulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
     100% { transform: scale(1); opacity: 1; }
 }
 
-.feedback-display {
-    font-size: 1.2em;
-    margin: 10px 0;
-    padding: 10px;
-    border-radius: 5px;
-    text-align: center;
-    transition: all 0.3s ease;
+@keyframes incorrectAnswerShake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    50% { transform: translateX(6px); }
+    75% { transform: translateX(-4px); }
+    100% { transform: translateX(0); }
 }
 
-.feedback-correct {
-    background-color: #4CAF50;
-    color: white;
-    animation: correctAnswer 0.5s ease;
+@keyframes equationFadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.feedback-incorrect {
-    background-color: #f44336;
-    color: white;
-    animation: incorrectAnswer 0.5s ease;
+@keyframes streakCounterPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+
+@keyframes achievementPopupAppear {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    70% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* Animation Helper Classes */
+.animate-correct-pulse {
+    animation: correctAnswerPulse 0.5s ease-in-out;
+}
+
+.animate-incorrect-shake {
+    animation: incorrectAnswerShake 0.4s ease-in-out;
+}
+
+.animate-equation-fadein {
+    animation: equationFadeIn 0.4s ease-out forwards;
+}
+
+.animate-streak-pop {
+    animation: streakCounterPop 0.3s ease-out;
+}
+
+.animate-achievement-popup {
+    animation: achievementPopupAppear 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
 }
 
 .streak-counter {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background-color: #FFD700;
-    color: #000;
+    background-color: #ffecb3;
+    color: #856404;
     padding: 5px 10px;
     border-radius: 15px;
     font-weight: bold;
-    display: none;
+    display: inline-block;
+    margin: 0 5px;
+    transition: transform 0.3s ease;
 }
 
 .streak-counter.active {
-    display: block;
-    animation: streakCounter 0.5s ease;
 }
 
 .achievement-popup {
@@ -268,17 +283,21 @@ input[type="text"]#answer-input {
     left: 50%;
     transform: translate(-50%, -50%);
     background-color: #fff;
-    padding: 20px;
+    padding: 20px 30px;
     border-radius: 10px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.2);
+    box-shadow: 0 5px 25px rgba(0,0,0,0.2);
     text-align: center;
     z-index: 1000;
     display: none;
-    animation: achievementUnlock 0.5s ease;
+    opacity: 0;
+    width: 90%;
+    max-width: 350px;
 }
 
 .achievement-popup.show {
     display: block;
+    opacity: 1;
+    animation: achievementPopupAppear 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
 }
 
 .achievement-icon {
@@ -617,6 +636,8 @@ input[type="text"]#answer-input {
     background: #f0f0f0;
     border-radius: 6px;
     font-weight: bold;
+    flex-wrap: wrap; /* Added wrap here for consistency */
+    gap: 10px; /* Added gap here for consistency */
 }
 
 .game-stats {
@@ -628,38 +649,47 @@ input[type="text"]#answer-input {
 
 .game-interaction-area {
     display: flex;
-    flex-direction: column; /* Stack equation and answer vertically for now */
-    align-items: center; /* Center equation and answer input */
-    gap: 15px;
+    flex-direction: row; /* Set row direction */
+    align-items: baseline; /* Align baselines of text/input */
+    justify-content: center; /* Center the group horizontally */
+    flex-wrap: wrap; /* Allow wrapping */
+    gap: 10px; /* Space between equation and input */
 }
 
 .equation-display {
     font-size: 2.5em;
-    padding: 15px;
+    padding: 10px; /* Adjusted padding */
     background: #e9ecef;
     border-radius: 6px;
     text-align: center;
-    min-width: 250px; /* Ensure enough width */
+    margin-bottom: 0; /* Removed default margin */
 }
 
 .answer-input-container {
     display: flex;
-    gap: 10px;
-    align-items: center;
+    flex-direction: column; /* Stack input and button */
+    gap: 8px; /* Space between input and button */
+    align-items: center; /* Center input/button horizontally */
+    width: auto; /* Allow container to size naturally */
 }
 
-.answer-input-container input {
-    font-size: 1.8em;
-    width: 120px; /* Adjust width */
+.answer-input-container input { /* Target the input specifically */
+    font-size: 1.8em; /* Match equation size */
+    width: 150px; /* Adjust width as needed */
     padding: 8px;
     text-align: center;
     border: 1px solid #ccc;
     border-radius: 4px;
+    box-sizing: border-box; /* Include padding in width */
 }
 
-.answer-input-container button {
-    font-size: 1.1em;
-    padding: 10px 15px;
+.answer-input-container button { /* Target the button specifically */
+    font-size: 1em;
+    padding: 8px 15px; /* Adjust padding */
+    width: 150px; /* Match input width */
+    box-sizing: border-box;
+    /* line-height: 1.8em; */ /* No longer needed */
+    /* align-self: center; */ /* No longer needed */
 }
 
 .feedback-display {
@@ -727,4 +757,176 @@ input[type="text"]#answer-input {
     font-size: 0.8em;   /* Smaller font size */
     color: #6c757d;   /* Grey color */
     margin-top: 20px; /* Add some space above it */
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+    body {
+        padding: 10px; /* Reduce padding on smaller screens */
+    }
+
+    #app-container {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+    }
+
+    /* Adjust game layout for stacking */
+    .game-layout-container {
+        flex-direction: column; /* Stack main and side panels */
+        gap: 15px;
+    }
+
+    .game-main-panel,
+    .game-side-panel {
+        flex: 1 1 100%; /* Allow panels to take full width */
+        height: auto; /* Reset height for side panel */
+    }
+
+    .game-header {
+        flex-wrap: wrap; /* Allow header items to wrap */
+        gap: 10px;
+        font-size: 0.9em;
+    }
+
+    .equation-display {
+        font-size: 2em; /* Slightly smaller equation */
+        min-width: auto; /* Allow shrinking */
+        padding: 10px;
+    }
+
+    .game-interaction-area {
+        /* Keep row layout on tablets, wrapping will handle overflow */
+        gap: 15px; /* Increase gap slightly */
+    }
+
+    .answer-input-container {
+        /* flex-direction: column; */ /* Remove stacking on tablet */
+        /* width: 100%; */ /* Remove full width on tablet */
+        flex-wrap: wrap; /* Allow input/button to wrap if needed */
+        justify-content: center; /* Center input/button group if wrapped */
+    }
+
+    .answer-input-container input {
+        font-size: 1.5em;
+        width: 80px; /* Adjust width for tablet */
+        /* max-width: 150px; */ /* Remove max width */
+    }
+
+    .answer-input-container button {
+        /* width: 80%; */ /* Remove width */
+        /* max-width: 150px; */ /* Remove max width */
+        font-size: 0.9em;
+        padding: 6px 10px;
+    }
+
+    .game-controls {
+        gap: 10px;
+    }
+
+    /* Adjust menu buttons */
+    .menu-buttons {
+        max-width: none; /* Allow full width */
+    }
+
+    .menu-buttons button {
+        font-size: 1em;
+        padding: 10px 12px;
+    }
+
+    /* Adjust achievement grid */
+    .achievements-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Allow more flexible columns */
+    }
+
+    /* Adjust settings form */
+    #settings-form fieldset {
+        padding: 10px;
+    }
+
+    input[type="number"] {
+        width: 80px; /* Ensure number inputs aren't too wide */
+    }
+
+    #timer-duration-inputs input[type="number"] {
+        width: 50px; /* Smaller timer inputs */
+    }
+
+    .unlocked-achievements-list {
+         grid-template-columns: repeat(auto-fill, minmax(35px, 1fr)); /* Slightly smaller icons grid */
+    }
+
+    .unlocked-achievement-item {
+        width: 35px;
+        height: 35px;
+    }
+
+     .unlocked-achievement-icon {
+        font-size: 1.3em;
+    }
+
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.5em;
+    }
+
+    .game-interaction-area {
+         flex-direction: column; /* Stack on very small screens */
+         align-items: center; /* Center when stacked */
+         gap: 10px; /* Reduce gap when stacked */
+    }
+
+    .game-header div { /* Target individual stat displays */
+        font-size: 0.9em;
+    }
+
+    .equation-display {
+        font-size: 1.8em;
+    }
+
+    .answer-input-container {
+         flex-direction: column; /* Stack input and button */
+         width: 100%;
+         align-items: center;
+         gap: 5px; /* Reduce gap */
+    }
+
+    .answer-input-container input {
+        font-size: 1.3em;
+        width: 80%;
+        max-width: 150px; /* Reapply stacking styles */
+    }
+    .answer-input-container button {
+        width: 80%;
+        max-width: 150px; /* Reapply stacking styles */
+        font-size: 1em; /* Reset font size */
+        padding: 8px 10px; /* Reset padding */
+        line-height: normal; /* Reset line height */
+    }
+
+    button {
+        padding: 8px 10px;
+        font-size: 0.9em;
+    }
+
+    .menu-buttons button {
+         padding: 10px 10px;
+    }
+
+    /* Further tighten side panel */
+    .game-side-panel {
+        padding: 10px;
+    }
+     .game-side-panel h3 {
+        font-size: 1em;
+        margin-bottom: 10px;
+     }
+
+    .achievements-grid {
+        grid-template-columns: 1fr; /* Stack achievement cards fully */
+    }
 } 

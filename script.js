@@ -87,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const SETTINGS_STORAGE_KEY = 'mathTrainerSettings';
     const PROGRESS_STORAGE_KEY = 'mathTrainerProgress';
     const TRAINING_LIST_STORAGE_KEY = 'mathTrainerTrainingList';
+    const HISTORY_STORAGE_KEY = 'mathTrainerHistory'; // Added history key
 
     // --- Award Constants ---
     const AWARD_THRESHOLDS = {
@@ -101,69 +102,30 @@ document.addEventListener('DOMContentLoaded', () => {
         Diamond: '💎'
     };
 
-    // Sound Effects
-    const SOUNDS = {
-        correct: () => {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.5);
-        },
-        incorrect: () => {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.type = 'square';
-            oscillator.frequency.setValueAtTime(220, audioContext.currentTime); // A3
-            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.3);
-        },
-        achievement: () => {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.8);
-        },
-        gameOver: () => {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.type = 'triangle';
-            oscillator.frequency.setValueAtTime(220, audioContext.currentTime); // A3
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 1);
-        }
+    // Define sound file paths (adjust extensions if needed)
+    const SOUND_FILES = {
+        correct: 'sounds/correct.mp3',
+        incorrect: 'sounds/incorrect.mp3',
+        achievement: 'sounds/achievement.mp3',
+        gameOver: 'sounds/gameOver.mp3',
+        click: 'sounds/click.mp3',
+        start: 'sounds/start.mp3',
+        skip: 'sounds/skip.mp3'
     };
+
+    // Simple reusable function to play a sound
+    function playSound(soundName) {
+        if (SOUND_FILES[soundName]) {
+            try {
+                const audio = new Audio(SOUND_FILES[soundName]);
+                audio.play().catch(error => console.log(`Playback failed for ${soundName}:`, error)); // Handle potential play errors
+            } catch (error) {
+                console.error(`Error loading sound ${soundName}:`, error);
+            }
+        } else {
+            console.warn(`Sound not defined: ${soundName}`);
+        }
+    }
 
     // Enhanced Achievement System
     const ACHIEVEMENTS = {
@@ -454,11 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (achievementObj) {
             showAchievementPopup(achievementObj);
-            try {
-                SOUNDS.achievement();
-            } catch (error) {
-                console.log('Sound playback failed:', error);
-            }
+            playSound('achievement');
             // Update the unlocked achievements view when a new achievement is unlocked
             updateUnlockedAchievementsView();
         } else {
@@ -468,43 +426,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showAchievementPopup(achievement) {
         const popup = document.getElementById('achievement-popup');
+        if (!popup) return; // Safety check
+
         popup.querySelector('.achievement-icon').textContent = achievement.icon;
         popup.querySelector('.achievement-title').textContent = achievement.title;
         popup.querySelector('.achievement-description').textContent = achievement.description;
-        popup.classList.add('show');
 
+        // Remove animation class first if it exists
+        popup.classList.remove('animate-achievement-popup');
+
+        // Show the popup and trigger animation
+        popup.classList.add('show'); // This now triggers the animation defined in CSS
+
+        playSound('achievement');
+
+        // Hide after duration
         setTimeout(() => {
             popup.classList.remove('show');
-        }, 3000);
+        }, 3500); // Slightly longer display time
     }
 
     // Enhanced Feedback System
     function showFeedback(isCorrect, correctAnswer) {
         const feedbackDisplay = document.getElementById('feedback-display');
+        const gameView = document.getElementById('game-view'); // Get game view for shake
+
         feedbackDisplay.textContent = isCorrect ? '🎉 Correct!' : `❌ Try again! The answer is ${correctAnswer}`;
         feedbackDisplay.className = `feedback-display ${isCorrect ? 'feedback-correct' : 'feedback-incorrect'}`;
 
-        // Play sound effect
-        try {
-            if (isCorrect) {
-                SOUNDS.correct();
-            } else {
-                SOUNDS.incorrect();
-            }
-        } catch (error) {
-            console.log('Sound playback failed:', error);
+        // Remove previous animation classes
+        feedbackDisplay.classList.remove('animate-correct-pulse', 'animate-incorrect-shake');
+        gameView.classList.remove('animate-incorrect-shake'); // Remove shake from game view
+
+        // Trigger animation
+        void feedbackDisplay.offsetWidth; // Force reflow to restart animation
+
+        if (isCorrect) {
+            playSound('correct');
+            feedbackDisplay.classList.add('animate-correct-pulse');
+        } else {
+            playSound('incorrect');
+            gameView.classList.add('animate-incorrect-shake'); // Shake the whole game view slightly
+            // feedbackDisplay.classList.add('animate-incorrect-shake'); // Optionally shake feedback text too
         }
 
+        // Remove animation class after it finishes
+        const animationDuration = isCorrect ? 500 : 400;
+        setTimeout(() => {
+            feedbackDisplay.classList.remove('animate-correct-pulse', 'animate-incorrect-shake');
+            gameView.classList.remove('animate-incorrect-shake');
+        }, animationDuration);
+
         // Update streak counter
+        const streakCounter = document.getElementById('streak-counter');
         if (isCorrect) {
             currentStreak++;
-            const streakCounter = document.getElementById('streak-counter');
             streakCounter.textContent = `🔥 ${currentStreak}`;
-            streakCounter.classList.add('active');
-            setTimeout(() => streakCounter.classList.remove('active'), 500);
+            streakCounter.classList.remove('animate-streak-pop'); // Remove class before adding
+            void streakCounter.offsetWidth; // Reflow
+            streakCounter.classList.add('active', 'animate-streak-pop'); // Add animation class
+            setTimeout(() => streakCounter.classList.remove('animate-streak-pop'), 300); // Remove after animation
         } else {
             currentStreak = 0;
             document.getElementById('streak-counter').textContent = '🔥 0';
+            streakCounter.classList.remove('active'); // Remove active class if streak breaks
         }
 
         // Check for achievements
@@ -791,6 +776,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function startGame(mode) {
         console.log(`Starting game in ${mode} mode.`);
         
+        // Play start sound
+        playSound('start');
+
         isGameOver = false; // Reset game over flag
 
         // --- Robust Settings Loading for Game Logic ---
@@ -903,6 +891,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update achievements view when starting game
         updateUnlockedAchievementsView();
+
+        playSound('gameOver'); // Play game over sound
+
+        if (finalScoreSpan) {
+            finalScoreSpan.textContent = currentScore;
+        }
     }
 
     function updateTimer() {
@@ -928,11 +922,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentGameMode = null; // Reset mode
         currentEquation = null;
         showView('scoreSummary');
-        try {
-            SOUNDS.gameOver();
-        } catch (error) {
-            console.log('Sound playback failed:', error);
-        }
     }
 
     function nextEquation() {
@@ -985,6 +974,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
              } else {
                  alert("Training complete! All equations practiced.");
+                 playSound('achievement'); // Sound for finishing training
                  showView('mainMenu');
                  currentEquation = null;
                  return;
@@ -993,6 +983,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentEquation) {
             equationDisplay.textContent = currentEquation.displayString;
+            // Trigger fade-in animation
+            void equationDisplay.offsetWidth; // Force reflow
+            equationDisplay.classList.add('animate-equation-fadein');
+
             // Display award status (FR4.2)
             const stats = progressData[currentEquation.displayString] || { currentAward: 'None' };
             if (awardIndicator) {
@@ -1017,6 +1011,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (answerInput) {
             answerInput.focus();
         }
+
+        // Remove fade-in class after animation completes
+        setTimeout(() => {
+            equationDisplay.classList.remove('animate-equation-fadein');
+        }, 400); // Match animation duration
     }
 
     function checkAnswer() {
@@ -1308,6 +1307,13 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     loadProgressData();
     loadTrainingList();
+    loadHistory(); // Ensure history is loaded
+
+    // Add click sound to all buttons
+    document.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', () => playSound('click'));
+    });
+
     showView('mainMenu'); // Start at the main menu
     console.log('Initialization Complete.');
 
@@ -1356,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add skip button event listener
     skipEquationBtn.addEventListener('click', () => {
+        playSound('skip'); // Play skip sound
         if (currentEquation) {
             // Add current equation to training list
             addToTrainingList(currentEquation.displayString);
@@ -1385,12 +1392,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('Are you sure you want to reset your calculation history and training list? This cannot be undone.')) {
             // Reset calculation history
             calculationHistory = [];
-            localStorage.setItem('calculationHistory', JSON.stringify(calculationHistory));
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(calculationHistory));
             
             // Reset training list and progress
             trainingList = [];
             trainingListProgress = {};
-            localStorage.setItem('trainingList', JSON.stringify(trainingList));
+            localStorage.setItem(TRAINING_LIST_STORAGE_KEY, JSON.stringify(trainingList));
             localStorage.setItem('trainingListProgress', JSON.stringify(trainingListProgress));
             
             // Update all relevant views
@@ -1437,7 +1444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadHistory() {
-        const savedHistory = localStorage.getItem('mathTrainerHistory');
+        const savedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
         if (savedHistory) {
             calculationHistory = JSON.parse(savedHistory);
             // Ensure loaded history items have the 'correct' property (for backward compatibility)
@@ -1453,6 +1460,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function saveHistory() {
-        localStorage.setItem('mathTrainerHistory', JSON.stringify(calculationHistory));
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(calculationHistory));
     }
 }); 
