@@ -134,8 +134,28 @@
         <div id="score-summary-view" class="view">
             <h2>Game Over!</h2>
             <p>Final Score: <span id="final-score">0</span></p>
-            <button id="play-again-btn">Play Again</button>
-            <button id="back-to-menu-from-score-btn">Back to Main Menu</button>
+
+            <div class="summary-stats">
+                <h3>Session Stats:</h3>
+                <ul>
+                    <li>Time Played: <span id="summary-time-played">N/A</span></li>
+                    <li>Total Equations: <span id="summary-total-equations">0</span></li>
+                    <li>Correct Answers: <span id="summary-correct-answers">0</span></li>
+                    <li>Incorrect Answers: <span id="summary-incorrect-answers">0</span> (<a href="#" id="summary-train-link">Train Them!</a>)</li>
+                </ul>
+            </div>
+
+            <div class="summary-achievements">
+                 <h3>Achievements Unlocked:</h3>
+                 <ul id="summary-achievements-list">
+                     <li>None this session!</li>
+                 </ul>
+            </div>
+
+            <div class="summary-controls">
+                <button id="play-again-btn">Play Again</button>
+                <button id="back-to-menu-from-score-btn">Back to Main Menu</button>
+            </div>
         </div>
 
         <!-- Achievement Popup -->

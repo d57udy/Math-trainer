@@ -80,6 +80,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentStreak = 0;
     let lastAnswerTime = 0;
     let achievements = JSON.parse(localStorage.getItem('achievements') || '{}');
+    // Session-specific stats
+    let totalEquationsPresented = 0;
+    let incorrectAnswersCount = 0;
+    let sessionAchievements = new Set();
     let calculationHistory = [];
     let isGameOver = false; // Declare the isGameOver flag
     const MAX_HISTORY_ITEMS = 50; // Keep last 50 calculations
@@ -395,33 +399,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function unlockAchievement(id) {
         if (!achievements[id]) {
-            console.error(`Achievement data not found for ID: ${id}`);
-            return;
-        }
-        achievements[id].unlocked = true;
-        // Find the achievement object in the nested structure
-        let achievementObj = null;
-        Object.entries(ACHIEVEMENTS).forEach(([category, value]) => {
-            if (typeof value === 'object' && !value.id) {
-                // This is a category of achievements
-                Object.entries(value).forEach(([key, achievement]) => {
-                    if (achievement.id === id) {
-                        achievementObj = achievement;
-                    }
-                });
-            } else if (value.id === id) {
-                // This is a single achievement
-                achievementObj = value;
+            console.error(`Attempted to unlock non-existent achievement: ${id}`);
+            // Try to re-initialize if structure is missing
+            if (Object.keys(achievements).length === 0) {
+                initializeAchievements(ACHIEVEMENTS);
+            } else { // If partially initialized, just add this one
+                achievements[id] = { unlocked: false, progress: 0 };
             }
-        });
+            // If still not found after potential init, something is wrong
+            if (!achievements[id]) return;
+        }
+        if (!achievements[id].unlocked) { // Check if already unlocked in general
+            achievements[id].unlocked = true;
+            sessionAchievements.add(id); // Add to session unlocks
 
-        if (achievementObj) {
-            showAchievementPopup(achievementObj);
-            playSound('achievement');
-            // Update the unlocked achievements view when a new achievement is unlocked
-            updateUnlockedAchievementsView();
-        } else {
-            console.error(`Achievement object not found for ID: ${id}`);
+            // Find the achievement object in the nested structure
+            let achievementObj = null;
+            Object.entries(ACHIEVEMENTS).forEach(([category, value]) => {
+                if (typeof value === 'object' && !value.id) {
+                    // This is a category of achievements
+                    Object.entries(value).forEach(([key, achievement]) => {
+                        if (achievement.id === id) {
+                            achievementObj = achievement;
+                        }
+                    });
+                } else if (value.id === id) {
+                    // This is a single achievement
+                    achievementObj = value;
+                }
+            });
+
+            if (achievementObj) {
+                showAchievementPopup(achievementObj);
+                playSound('achievement');
+                // Update the unlocked achievements view when a new achievement is unlocked
+                updateUnlockedAchievementsView();
+            } else {
+                console.error(`Achievement object not found for ID: ${id}`);
+            }
         }
     }
 
@@ -849,6 +864,11 @@ document.addEventListener('DOMContentLoaded', () => {
             streakCounter.textContent = '🔥 0';
         }
 
+        // Reset session stats
+        totalEquationsPresented = 0;
+        incorrectAnswersCount = 0;
+        sessionAchievements.clear();
+
         if (mode === 'regular') {
             console.log(`[startGame] Starting timer with duration: ${currentSettings.timerDuration} seconds`); // Add log
             timeLeft = currentSettings.timerDuration;
@@ -939,6 +959,40 @@ document.addEventListener('DOMContentLoaded', () => {
         currentEquation = null;
         showView('scoreSummary');
 
+        // Populate detailed summary stats
+        const timePlayed = currentSettings.timerDuration;
+        document.getElementById('summary-time-played').textContent = formatTime(timePlayed);
+        document.getElementById('summary-total-equations').textContent = totalEquationsPresented;
+        document.getElementById('summary-correct-answers').textContent = currentScore; // Use final score for correct
+        document.getElementById('summary-incorrect-answers').textContent = incorrectAnswersCount;
+
+        const summaryAchievementsList = document.getElementById('summary-achievements-list');
+        summaryAchievementsList.innerHTML = ''; // Clear previous
+        if (sessionAchievements.size > 0) {
+            // Find achievement details using the flat structure method
+            const flatAchievementsLookup = {};
+            Object.values(ACHIEVEMENTS).forEach(value => {
+                if (typeof value === 'object' && !value.id) {
+                    Object.values(value).forEach(achievement => {
+                        flatAchievementsLookup[achievement.id] = achievement;
+                    });
+                } else {
+                    flatAchievementsLookup[value.id] = value;
+                }
+            });
+
+            sessionAchievements.forEach(id => {
+                const achievement = flatAchievementsLookup[id];
+                if (achievement) {
+                    const li = document.createElement('li');
+                    li.textContent = `${achievement.icon} ${achievement.title}`;
+                    summaryAchievementsList.appendChild(li);
+                }
+            });
+        } else {
+            summaryAchievementsList.innerHTML = '<li>None this session!</li>';
+        }
+
         // Use the single saveHistory function
         saveHistory(); 
         // No need to call updateHistoryView here, it's called when viewing the achievements page
@@ -1005,6 +1059,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentEquation) {
             equationDisplay.textContent = currentEquation.displayString;
+            totalEquationsPresented++; // Increment here, as equation is now shown
             console.log('[nextEquation] Equation string displayed.'); // <<< ADD LOG
 
             // Trigger fade-in animation
@@ -1072,6 +1127,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(userAnswer)) {
             feedbackDisplay.textContent = "Please enter a valid number.";
             feedbackDisplay.className = 'feedback-display feedback-incorrect';
+            // totalEquationsPresented++; // Don't count invalid input as an attempt?
+            // incorrectAnswersCount++; // Or count it as incorrect?
+            // Decision: Let's not count invalid entries as attempts for now.
             answerInput.value = '';
             return;
         }
@@ -1127,6 +1185,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addToHistory(currentEquation, userAnswerText, correctAnswer, timeTaken, isCorrect);
 
         } else {
+            incorrectAnswersCount++; // Increment incorrect count
             showFeedback(false, correctAnswer);
 
             // Add to history even for incorrect answers
@@ -1202,6 +1261,22 @@ document.addEventListener('DOMContentLoaded', () => {
     playAgainBtn.addEventListener('click', () => {
         startGame('regular');
     });
+
+    // Add listener for the "Train Them!" link on the score summary
+    const summaryTrainLink = document.getElementById('summary-train-link');
+    if (summaryTrainLink) {
+        summaryTrainLink.addEventListener('click', (e) => {
+            e.preventDefault(); // Prevent navigating to #
+            if (trainingList.length > 0) {
+                console.log('[summary-train-link] Starting training from summary.');
+                startGame('training');
+            } else {
+                alert("Your training list is currently empty!");
+            }
+        });
+    } else {
+        console.error('Could not find summary-train-link element.');
+    }
 
     submitAnswerBtn.addEventListener('click', () => {
         // console.log('Submitting Answer...'); // Logged inside checkAnswer now
@@ -1408,10 +1483,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add skip button event listener
     skipEquationBtn.addEventListener('click', () => {
         playSound('skip'); // Play skip sound
-        if (currentEquation) {
+        if (currentEquation && currentGameMode) { // Ensure there is an equation and game is active
             // Add current equation to training list
             addToTrainingList(currentEquation.displayString);
             
+            // Count skipped equation as presented and incorrect
+            totalEquationsPresented++;
+            incorrectAnswersCount++;
+
             // Move to next equation
             nextEquation();
         }

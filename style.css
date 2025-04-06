@@ -759,6 +759,72 @@ input[type="text"]#answer-input {
     margin-top: 20px; /* Add some space above it */
 }
 
+/* Score Summary View */
+#score-summary-view {
+    text-align: left; /* Align text to left for lists */
+}
+
+.summary-stats,
+.summary-achievements {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.summary-stats h3,
+.summary-achievements h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #495057;
+    text-align: center; /* Center headings */
+}
+
+.summary-stats ul,
+.summary-achievements ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.summary-stats li,
+.summary-achievements li {
+    padding: 5px 0;
+    border-bottom: 1px dashed #eee; /* Dashed separator */
+}
+
+.summary-stats li:last-child,
+.summary-achievements li:last-child {
+    border-bottom: none;
+}
+
+.summary-stats span,
+.summary-achievements span { /* Target value spans */
+    font-weight: bold;
+    float: right; /* Align values to the right */
+}
+
+#summary-achievements-list li {
+    font-size: 1em;
+}
+
+#summary-train-link {
+    font-size: 0.9em;
+    text-decoration: none;
+    color: #007bff;
+    margin-left: 5px;
+}
+
+#summary-train-link:hover {
+    text-decoration: underline;
+}
+
+.summary-controls {
+    text-align: center; /* Center buttons */
+    margin-top: 25px;
+}
+
 /* --- Responsive Design --- */
 @media (max-width: 768px) {
     body {
