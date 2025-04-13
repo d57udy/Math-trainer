@@ -84,14 +84,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let totalEquationsPresented = 0;
     let incorrectAnswersCount = 0;
     let sessionAchievements = new Set();
-    let calculationHistory = [];
+    let calculationHistory = []; // Keep for now, will be replaced
     let isGameOver = false; // Declare the isGameOver flag
-    const MAX_HISTORY_ITEMS = 50; // Keep last 50 calculations
+    let isAnswerSubmitted = false; // Flag to prevent multiple submissions
+    const MAX_HISTORY_ITEMS = 50; // Keep last 50 calculations - NOW MAX SESSIONS
+    const MAX_SESSIONS_TO_KEEP = 20; // Maximum number of sessions to store
 
     const SETTINGS_STORAGE_KEY = 'mathTrainerSettings';
     const PROGRESS_STORAGE_KEY = 'mathTrainerProgress';
     const TRAINING_LIST_STORAGE_KEY = 'mathTrainerTrainingList';
-    const HISTORY_STORAGE_KEY = 'mathTrainerHistory'; // Added history key
+    // const HISTORY_STORAGE_KEY = 'mathTrainerHistory'; // Old key
+    const SESSION_HISTORY_STORAGE_KEY = 'mathTrainerSessionHistory'; // New key for sessions
+
+    // New state variables for session tracking
+    let gameSessionHistory = []; // Array of session objects
+    let currentSessionData = null; // Holds data for the currently active game
 
     // --- Award Constants ---
     const AWARD_THRESHOLDS = {
@@ -796,6 +803,21 @@ document.addEventListener('DOMContentLoaded', () => {
         playSound('start');
 
         isGameOver = false; // Reset game over flag
+        isAnswerSubmitted = false; // Reset submission flag
+
+        // Initialize current session data
+        currentSessionData = {
+            sessionId: Date.now(), // Simple unique ID for the session
+            startTime: new Date().toISOString(),
+            endTime: null,
+            mode: mode,
+            score: 0,
+            totalEquations: 0,
+            correctAnswers: 0,
+            incorrectAnswers: 0,
+            skippedAnswers: 0,
+            calculations: [] // Array to hold individual calculation objects within this session
+        };
 
         // --- Robust Settings Loading for Game Logic ---
         currentSettings = { ...defaultSettings }; // Start with defaults
@@ -857,6 +879,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (answerInput) {
             answerInput.value = '';
+            answerInput.disabled = false; // Ensure input is enabled on game start
+        }
+        if (submitAnswerBtn) {
+            submitAnswerBtn.disabled = false; // Ensure button is enabled on game start
+        }
+        if (skipEquationBtn) {
+            skipEquationBtn.disabled = false; // Ensure button is enabled on game start
         }
         currentStreak = 0;
         const streakCounter = document.getElementById('streak-counter');
@@ -942,29 +971,70 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[endGame] Function entered.');
         console.log('Game Over!');
         isGameOver = true; // Set game over flag
+        isAnswerSubmitted = false; // Reset flag on game end
+
         if (gameTimerInterval) {
             console.log('[endGame] Clearing gameTimerInterval.'); // Log clearing
             clearInterval(gameTimerInterval);
             gameTimerInterval = null;
         }
+        // Ensure controls are disabled visually after game ends
+        if (answerInput) answerInput.disabled = true;
+        if (submitAnswerBtn) submitAnswerBtn.disabled = true;
+        if (skipEquationBtn) skipEquationBtn.disabled = true;
+
+        // --- Finalize and Save Session Data ---
+        if (currentSessionData) {
+            currentSessionData.endTime = new Date().toISOString();
+            currentSessionData.score = currentScore; // Final score
+            // Stats like totalEquations, correctAnswers, incorrectAnswers are updated during checkAnswer/skip
+
+            // Add the completed session to the history
+            gameSessionHistory.unshift(currentSessionData);
+
+            // Limit the number of stored sessions
+            if (gameSessionHistory.length > MAX_SESSIONS_TO_KEEP) {
+                gameSessionHistory = gameSessionHistory.slice(0, MAX_SESSIONS_TO_KEEP);
+            }
+
+            saveSessionHistory(); // Save the updated history array
+            currentSessionData = null; // Clear current session data
+        } else {
+             console.warn("[endGame] No currentSessionData found to finalize.");
+        }
+        // --- End Finalize Session Data ---
 
         // Log right before playing the sound
         console.log('[endGame] About to play gameOver sound.');
         playSound('gameOver'); // Play game over sound
 
+        // Update Score Summary View (using stats from the *just finished* session if possible)
+        // Find the session we just finished (should be the first one now)
+        const finishedSession = gameSessionHistory[0];
+
         if (finalScoreSpan) {
-            finalScoreSpan.textContent = currentScore;
+            finalScoreSpan.textContent = currentScore; // Use the final score from the game
         }
-        currentGameMode = null; // Reset mode
+        currentGameMode = null; // Reset mode (already done implicitly by setting currentSessionData=null)
         currentEquation = null;
         showView('scoreSummary');
 
-        // Populate detailed summary stats
-        const timePlayed = currentSettings.timerDuration;
-        document.getElementById('summary-time-played').textContent = formatTime(timePlayed);
-        document.getElementById('summary-total-equations').textContent = totalEquationsPresented;
-        document.getElementById('summary-correct-answers').textContent = currentScore; // Use final score for correct
-        document.getElementById('summary-incorrect-answers').textContent = incorrectAnswersCount;
+        // Populate detailed summary stats from the finished session data
+        if (finishedSession) {
+            const timePlayed = finishedSession.startTime && finishedSession.endTime
+                ? Math.round((new Date(finishedSession.endTime) - new Date(finishedSession.startTime)) / 1000)
+                : currentSettings.timerDuration; // Fallback to setting duration
+            document.getElementById('summary-time-played').textContent = formatTime(timePlayed);
+            document.getElementById('summary-total-equations').textContent = finishedSession.totalEquations;
+            document.getElementById('summary-correct-answers').textContent = finishedSession.correctAnswers;
+            document.getElementById('summary-incorrect-answers').textContent = finishedSession.incorrectAnswers + finishedSession.skippedAnswers; // Combine incorrect + skipped for training link relevance
+        } else {
+             // Fallback if session data wasn't found (shouldn't happen)
+             document.getElementById('summary-time-played').textContent = formatTime(currentSettings.timerDuration);
+             document.getElementById('summary-total-equations').textContent = totalEquationsPresented; // Use older session vars as fallback
+             document.getElementById('summary-correct-answers').textContent = currentScore;
+             document.getElementById('summary-incorrect-answers').textContent = incorrectAnswersCount;
+        }
 
         const summaryAchievementsList = document.getElementById('summary-achievements-list');
         summaryAchievementsList.innerHTML = ''; // Clear previous
@@ -992,10 +1062,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             summaryAchievementsList.innerHTML = '<li>None this session!</li>';
         }
-
-        // Use the single saveHistory function
-        saveHistory(); 
-        // No need to call updateHistoryView here, it's called when viewing the achievements page
     }
 
     function nextEquation() {
@@ -1005,11 +1071,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        equationDisplay.textContent = ''; // Clear feedback
-        if (feedbackDisplay) {
-            feedbackDisplay.textContent = '';
-            feedbackDisplay.className = 'feedback-display';
-        }
+        // equationDisplay.textContent = ''; // Clear previous equation immediately
+        // feedbackDisplay.textContent = ''; // REMOVED: Don't clear feedback here
+        // feedbackDisplay.className = 'feedback-display'; // REMOVED: Don't clear feedback class here
+
         if (answerInput) {
             answerInput.value = '';
         }
@@ -1115,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkAnswer() {
-        if (isGameOver) return;
+        if (isGameOver || isAnswerSubmitted || !currentSessionData) return; // Exit if game over, submitted, or no active session
 
         const userAnswerText = answerInput.value.trim();
         if (userAnswerText === '') {
@@ -1134,6 +1199,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        isAnswerSubmitted = true; // Set flag to prevent further submissions
+        submitAnswerBtn.disabled = true; // Disable submit button
+        answerInput.disabled = true; // Disable input field
+        skipEquationBtn.disabled = true; // Disable skip button
+
         const correctAnswer = currentEquation.correctResult;
         const isCorrect = userAnswer === correctAnswer;
 
@@ -1149,12 +1219,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const stats = progressData[equationString];
 
+        // Create calculation record for the session history
+        const calculationRecord = {
+            equationString: equationString,
+            operand1: currentEquation.operand1,
+            operand2: currentEquation.operand2,
+            operator: currentEquation.operator,
+            userAnswer: userAnswerText,
+            correctAnswer: correctAnswer,
+            timeTaken: timeTaken,
+            isCorrect: isCorrect,
+            timestamp: Date.now()
+        };
+        currentSessionData.calculations.push(calculationRecord);
+        currentSessionData.totalEquations++; // Increment equations attempted in this session
+
         if (isCorrect) {
+            // --- CORRECT Answer Path --- Corrected Flow ---
             showFeedback(true, correctAnswer);
             currentScore++;
+            currentSessionData.correctAnswers++; // Update session stats
             if (scoreDisplay) {
                 scoreDisplay.textContent = `Score: ${currentScore}`;
             }
+
+            // Ensure controls are enabled (in case of pending incorrect feedback timeout)
+            submitAnswerBtn.disabled = false;
+            answerInput.disabled = false;
+            skipEquationBtn.disabled = false;
 
             // Update Progress Data (FR3)
             stats.correctCount++;
@@ -1181,32 +1273,73 @@ document.addEventListener('DOMContentLoaded', () => {
             updateTrainingListProgress(equationString, true);
             removeFromTrainingList(equationString);
 
-            // Add to history
-            addToHistory(currentEquation, userAnswerText, correctAnswer, timeTaken, isCorrect);
+            // Add to history - handled by pushing calculationRecord above
+            // addToHistory(currentEquation, userAnswerText, correctAnswer, timeTaken, isCorrect);
+
+            // Reset start time immediately before getting next equation
+            equationStartTime = null;
+
+            // Briefly set flag to prevent re-entry during immediate nextEquation call
+            isAnswerSubmitted = true;
+
+            // Immediately load the next question
+            if (currentGameMode && !isGameOver) {
+                nextEquation();
+            }
+
+            // Reset flag immediately after nextEquation is initiated
+            isAnswerSubmitted = false;
+
+            // Clear the "Correct!" feedback after a delay, without blocking
+            setTimeout(() => {
+                // Check if the feedback hasn't already been replaced by incorrect feedback
+                if (feedbackDisplay.classList.contains('feedback-correct')) {
+                    feedbackDisplay.textContent = '';
+                    feedbackDisplay.className = 'feedback-display';
+                }
+            }, 1200); // Keep feedback visible for 1.2 seconds
+            // --- END CORRECT Answer Path ---
 
         } else {
-            incorrectAnswersCount++; // Increment incorrect count
+            // --- INCORRECT Answer Path (Keep existing logic) ---
+            isAnswerSubmitted = true; // Set flag to prevent further submissions
+            submitAnswerBtn.disabled = true; // Disable submit button
+            answerInput.disabled = true; // Disable input field
+            skipEquationBtn.disabled = true; // Disable skip button
+
+            // incorrectAnswersCount++; // Now handled within session data
+            currentSessionData.incorrectAnswers++; // Update session stats
             showFeedback(false, correctAnswer);
 
-            // Add to history even for incorrect answers
-            addToHistory(currentEquation, userAnswerText, correctAnswer, timeTaken, isCorrect);
+            // Add to history - handled by pushing calculationRecord above
+            // addToHistory(currentEquation, userAnswerText, correctAnswer, timeTaken, isCorrect);
 
             // Add to training list if answered incorrectly
             addToTrainingList(equationString);
 
             // Update training list progress (even for incorrect answers)
             updateTrainingListProgress(equationString, false);
+
+            // Reset start time for the next equation (can be done here or in setTimeout)
+            equationStartTime = null;
+
+            // Load the next question after a short delay to allow reading feedback
+            setTimeout(() => {
+                // Reset submission flag and re-enable controls *before* getting next equation
+                isAnswerSubmitted = false;
+                if (!isGameOver) { // Only re-enable if game is still running
+                    submitAnswerBtn.disabled = false;
+                    answerInput.disabled = false;
+                     skipEquationBtn.disabled = false; // Re-enable skip button
+                    answerInput.focus(); // Focus back on input for next question
+                }
+
+                if (currentGameMode && !isGameOver) {
+                     nextEquation();
+                }
+            }, 1200); // Keep delay for incorrect answers
+            // --- END INCORRECT Answer Path ---
         }
-
-        // Reset start time for the next equation
-        equationStartTime = null;
-
-        // Load the next question after a short delay
-        setTimeout(() => {
-            if (currentGameMode && !isGameOver) {
-                 nextEquation();
-            }
-        }, 1200); // Slightly longer delay to see feedback + time
 
         // Update achievements view after checking answer
         updateUnlockedAchievementsView();
@@ -1232,9 +1365,30 @@ document.addEventListener('DOMContentLoaded', () => {
             clearInterval(gameTimerInterval);
             gameTimerInterval = null;
         }
-        currentGameMode = null; // Ensure game state is reset
+         // Finalize session data if quitting mid-game
+         if (currentSessionData && !isGameOver) { // Only finalize if not already ended normally
+             console.log('[quitGameBtn] Finalizing session data on quit.');
+             currentSessionData.endTime = new Date().toISOString();
+             currentSessionData.score = currentScore; // Save current score on quit
+             gameSessionHistory.unshift(currentSessionData);
+             if (gameSessionHistory.length > MAX_SESSIONS_TO_KEEP) {
+                 gameSessionHistory = gameSessionHistory.slice(0, MAX_SESSIONS_TO_KEEP);
+             }
+             saveSessionHistory();
+         }
+
+        // Reset state variables
+        currentGameMode = null;
         currentEquation = null;
+        isAnswerSubmitted = false;
+        isGameOver = true; // Treat quitting as game over state
+        currentSessionData = null; // Clear current session
+
         showView('mainMenu');
+         // Ensure controls are re-enabled visually if quitting mid-submission (although view changes)
+         if (answerInput) answerInput.disabled = false;
+         if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+         if (skipEquationBtn) skipEquationBtn.disabled = false;
     });
 
     backToMenuFromScoreBtn.addEventListener('click', () => showView('mainMenu'));
@@ -1278,15 +1432,12 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Could not find summary-train-link element.');
     }
 
-    submitAnswerBtn.addEventListener('click', () => {
-        // console.log('Submitting Answer...'); // Logged inside checkAnswer now
-        checkAnswer();
-    });
-
     answerInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && currentView === 'game') {
             // console.log('Submitting Answer (Enter)...'); // Logged inside checkAnswer now
-            checkAnswer();
+            if (!isAnswerSubmitted) { // Check flag here too
+                 checkAnswer();
+            }
             // submitAnswerBtn.click(); // No longer needed, direct call is fine
         }
     });
@@ -1335,44 +1486,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateHistoryView() {
-        if (!calculationsHistory) return; // Check if element exists
+        if (!calculationsHistory) return; // Check if element exists (using old ID for now)
+
         calculationsHistory.innerHTML = ''; // Clear previous history
-        if (calculationHistory.length === 0) {
-            calculationsHistory.innerHTML = '<div class="history-item-empty">No calculations recorded yet.</div>';
+        calculationsHistory.classList.remove('history-list'); // Remove old class if needed
+        calculationsHistory.classList.add('session-history-container'); // Add new class for styling
+
+        if (gameSessionHistory.length === 0) {
+            calculationsHistory.innerHTML = '<div class="history-item-empty">No game sessions recorded yet.</div>';
         } else {
-            calculationHistory.forEach(item => {
-                const historyItem = document.createElement('div');
-                const correctnessIndicator = item.correct ? '<span class="correct-indicator">✔</span>' : '<span class="incorrect-indicator">✘</span>';
-                // Use the new data structure
-                historyItem.className = `history-item ${item.correct ? 'correct' : 'incorrect'}`;
-                historyItem.innerHTML = `
-                    <span class="history-equation">${item.equation} ${item.correctAnswer}</span> 
-                    <span class="history-user-answer">(You: ${item.userAnswer || 'N/A'})</span> 
-                    ${correctnessIndicator}
-                `; // Removed the extra '=' sign
-                calculationsHistory.appendChild(historyItem);
+            gameSessionHistory.forEach(session => {
+                const sessionDiv = document.createElement('div');
+                sessionDiv.className = 'session-history-item';
+
+                const startTime = new Date(session.startTime);
+                const endTime = session.endTime ? new Date(session.endTime) : null;
+                const duration = endTime ? Math.round((endTime - startTime) / 1000) : null; // Duration in seconds
+
+                // Format dates and times nicely
+                 const startFormatted = startTime.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+                 const endFormatted = endTime ? endTime.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'In Progress?'; // Or maybe just duration
+                 const durationFormatted = duration !== null ? formatTime(duration) : 'N/A';
+
+                // Determine mode text
+                const modeText = session.mode === 'regular' ? 'Challenge' : 'Training';
+
+                sessionDiv.innerHTML = `
+                    <div class="session-header">
+                        <span class="session-mode">${modeText}</span>
+                        <span class="session-time">Started: ${startFormatted} (${durationFormatted})</span>
+                        ${session.mode === 'regular' ? `<span class="session-score">Score: ${session.score}</span>` : ''}
+                    </div>
+                    <div class="session-stats">
+                         Correct: ${session.correctAnswers}, Incorrect: ${session.incorrectAnswers}, Skipped: ${session.skippedAnswers} (Total: ${session.totalEquations})
+                    </div>
+                    <details class="session-calculations-details">
+                         <summary>View Calculations (${session.calculations.length})</summary>
+                         <ul class="session-calculations-list">
+                             ${session.calculations.map(calc => `
+                                 <li class="calculation-item ${calc.isCorrect ? 'correct' : 'incorrect'}">
+                                     <span class="calc-equation">${calc.equationString.replace(' = ?', '')} = ${calc.correctAnswer}</span>
+                                     <span class="calc-user-answer">(You: ${calc.userAnswer})</span>
+                                     <span class="calc-indicator">${calc.isCorrect ? '✔' : '✘'}</span>
+                                     <span class="calc-time">(${calc.timeTaken ? calc.timeTaken.toFixed(1) + 's' : '-'})</span>
+                                 </li>
+                             `).join('')}
+                         </ul>
+                     </details>
+                `;
+                calculationsHistory.appendChild(sessionDiv);
             });
         }
-    }
-
-    function addToHistory(equation, userAnswer, correctAnswer, time, isCorrect) {
-        const historyItem = {
-            equation: equation.displayString,
-            userAnswer: userAnswer,
-            correctAnswer: correctAnswer,
-            correct: isCorrect, // Store correctness
-            timeTaken: time, // Store time taken
-            timestamp: Date.now()
-        };
-        
-        calculationHistory.unshift(historyItem);
-        if (calculationHistory.length > MAX_HISTORY_ITEMS) {
-            calculationHistory.pop();
-        }
-        
-        // Use the single saveHistory function
-        saveHistory(); 
-        // No need to call updateHistoryView here, it's called when viewing the achievements page
     }
 
     // Add to Navigation Event Listeners section
@@ -1482,14 +1646,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add skip button event listener
     skipEquationBtn.addEventListener('click', () => {
+        if (isAnswerSubmitted || isGameOver || !currentSessionData) return; // Don't allow skipping during feedback, game over, or no session
+
         playSound('skip'); // Play skip sound
         if (currentEquation && currentGameMode) { // Ensure there is an equation and game is active
             // Add current equation to training list
             addToTrainingList(currentEquation.displayString);
-            
-            // Count skipped equation as presented and incorrect
-            totalEquationsPresented++;
-            incorrectAnswersCount++;
+
+            // Record the skip in the current session data
+            const calculationRecord = {
+                equationString: currentEquation.displayString,
+                operand1: currentEquation.operand1,
+                operand2: currentEquation.operand2,
+                operator: currentEquation.operator,
+                userAnswer: 'Skipped',
+                correctAnswer: currentEquation.correctResult,
+                timeTaken: null, // No time taken for skip
+                isCorrect: false, // Treat skip as incorrect for history purposes
+                timestamp: Date.now()
+            };
+            currentSessionData.calculations.push(calculationRecord);
+            currentSessionData.totalEquations++; // Increment total equations attempted
+            currentSessionData.skippedAnswers++; // Increment skipped count
 
             // Move to next equation
             nextEquation();
@@ -1514,10 +1692,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resetHistoryBtn.addEventListener('click', () => {
         if (confirm('Are you sure you want to reset your calculation history and training list? This cannot be undone.')) {
-            // Reset calculation history
-            calculationHistory = [];
-            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(calculationHistory));
-            
+            // Reset calculation history (session history)
+            gameSessionHistory = [];
+            saveSessionHistory(); // Save the empty array
+
             // Reset training list and progress
             trainingList = [];
             trainingListProgress = {};
@@ -1568,22 +1746,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadHistory() {
-        const savedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+        const savedHistory = localStorage.getItem(SESSION_HISTORY_STORAGE_KEY); // Use new key
         if (savedHistory) {
-            calculationHistory = JSON.parse(savedHistory);
-            // Ensure loaded history items have the 'correct' property (for backward compatibility)
-            calculationHistory.forEach(item => {
-                if (item.correct === undefined) {
-                    // Simple guess: if userAnswer matches correctAnswer
-                    item.correct = parseInt(item.userAnswer) === item.correctAnswer;
-                }
-            });
+            try {
+                 gameSessionHistory = JSON.parse(savedHistory);
+                 // Basic validation (ensure it's an array)
+                 if (!Array.isArray(gameSessionHistory)) {
+                     console.warn("Loaded session history is not an array, resetting.");
+                     gameSessionHistory = [];
+                 }
+                 // Can add more validation here if needed (e.g., check object structure)
+            } catch (e) {
+                 console.error("Failed to parse session history, resetting.", e);
+                 gameSessionHistory = [];
+            }
         } else {
-            calculationHistory = [];
+            gameSessionHistory = [];
         }
+        // Ensure calculationHistory is cleared (or remove its usage entirely later)
+        calculationHistory = [];
     }
 
-    function saveHistory() {
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(calculationHistory));
+    function saveSessionHistory() {
+        localStorage.setItem(SESSION_HISTORY_STORAGE_KEY, JSON.stringify(gameSessionHistory));
     }
 }); 
