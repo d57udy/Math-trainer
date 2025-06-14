@@ -1442,6 +1442,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    submitAnswerBtn.addEventListener('click', () => {
+        if (currentView === 'game') {
+            checkAnswer();
+        }
+    });
+
     // --- New Functions for Achievements and History ---
     function updateAchievementsView() {
         achievementsList.innerHTML = '';
